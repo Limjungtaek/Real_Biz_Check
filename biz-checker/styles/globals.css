@@ -430,3 +430,69 @@ tbody td { padding: 13px 16px; vertical-align: middle; }
   .pstep { border-right: none; border-bottom: 1px solid var(--border); }
   .pstep:last-child { border-bottom: none; }
 }
+
+/* ── LIGHT MODE ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:          #f0f4fa;
+    --bg2:         #e6edf7;
+    --surface:     #ffffff;
+    --surface2:    #f4f7fc;
+    --surface3:    #e8eef8;
+    --border:      #d0daea;
+    --border2:     #b8cade;
+    --text:        #0f1c2e;
+    --text2:       #3a5270;
+    --text3:       #7a96b4;
+    --cyan:        #0077cc;
+    --cyan-dim:    rgba(0,119,204,.08);
+    --cyan-glow:   rgba(0,119,204,.2);
+    --teal:        #0066aa;
+    --green:       #0a8f5a;
+    --green-dim:   rgba(10,143,90,.08);
+    --amber:       #b56a00;
+    --amber-dim:   rgba(181,106,0,.08);
+    --red:         #cc2233;
+    --red-dim:     rgba(204,34,51,.08);
+    --gray-dim:    rgba(80,100,130,.08);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* grid 배경 라이트 모드 */
+  body::after {
+    background-image:
+      linear-gradient(rgba(0,119,204,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,119,204,.04) 1px, transparent 1px);
+  }
+
+  /* 테이블 hover */
+  tbody tr:hover { background: rgba(0,119,204,.04); }
+
+  /* 버튼 */
+  .btn-primary { color: #fff; }
+
+  /* 카드 상단 라인 */
+  .card::before {
+    background: linear-gradient(90deg, transparent, rgba(0,119,204,.2), transparent);
+  }
+
+  /* 통계 카드 하단 바 색상은 그대로 변수 참조 */
+  h1 em { text-shadow: 0 0 30px rgba(0,119,204,.15); }
+
+  /* 모달 오버레이 */
+  .modal-overlay { background: rgba(15,28,46,.75); }
+  .modal-close { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+
+  /* 에러박스 */
+  .error-box { color: #991122; }
+
+  /* 파일칩 */
+  .file-chip { color: var(--green); }
+
+  /* footer */
+  .footer a { color: var(--cyan); }
+}
