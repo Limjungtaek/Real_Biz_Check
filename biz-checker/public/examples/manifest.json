@@ -1,12 +1,12 @@
 {
   "images": [
     {
-      "file": "sample1.png",
-      "caption": "엑셀 입력 예시"
+      "file": "txt_example.png",
+      "caption": "텍스트 파일 예시"
     },
     {
-      "file": "sample2.png",
-      "caption": "텍스트 입력 예시"
+      "file": "excel_example.png",
+      "caption": "엑셀 파일 예시"
     }
   ]
 }
