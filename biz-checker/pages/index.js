@@ -55,6 +55,16 @@ function exportCSV(results) {
   URL.revokeObjectURL(url);
 }
 
+// 이미지 파일을 base64로 변환
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // xlsx/xlsm/csv/txt 파싱
 async function parseFile(file) {
   const ext = file.name.split(".").pop().toLowerCase();
@@ -71,7 +81,6 @@ async function parseFile(file) {
     return new Promise((res) => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        // CSV → 숫자만 추출
         const nums = (e.target.result || "")
           .split(/[\n,]+/)
           .map((s) => s.replace(/[^0-9]/g, ""))
@@ -90,7 +99,6 @@ async function parseFile(file) {
           const wb = XLSX.read(e.target.result, { type: "array" });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          // 모든 셀에서 숫자 10자리 추출
           const nums = [];
           data.forEach((row) => {
             (row || []).forEach((cell) => {
@@ -119,9 +127,10 @@ export default function Home() {
   const [filter, setFilter] = useState("all");
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0); // 0=idle, 1~4=steps
+  const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [exImages, setExImages] = useState([]); // {url, name}[]
+  const [progressText, setProgressText] = useState("");
+  const [exImages, setExImages] = useState([]); // {data (base64), name}[]
   const [modalImg, setModalImg] = useState(null);
   const fileRef = useRef();
 
@@ -146,40 +155,45 @@ export default function Home() {
     if (file) handleFile(file);
   };
 
-  // ── Example image upload ──
-  const handleExImage = (e) => {
+  // ── Example image upload (base64로 저장 → 사라지지 않음) ──
+  const handleExImage = async (e) => {
     const files = Array.from(e.target.files || []);
-    files.forEach((f) => {
-      const url = URL.createObjectURL(f);
-      setExImages((prev) => [...prev, { url, name: f.name }]);
-    });
+    for (const f of files) {
+      try {
+        const data = await fileToBase64(f);
+        setExImages((prev) => [...prev, { data, name: f.name }]);
+      } catch {
+        // 이미지 변환 실패 무시
+      }
+    }
     e.target.value = "";
   };
 
   const removeExImage = (i) => {
-    setExImages((prev) => {
-      URL.revokeObjectURL(prev[i].url);
-      return prev.filter((_, idx) => idx !== i);
-    });
+    setExImages((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => exImages.forEach((img) => URL.revokeObjectURL(img.url));
-  }, []);
-
-  // ── API call with step progress ──
+  // ── API call with step progress (100건 초과 자동 분할) ──
   const handleCheck = async () => {
     if (uniqueNumbers.length === 0) return;
     setLoading(true); setError(null); setResults(null); setFilter("all");
 
+    const totalCount = uniqueNumbers.length;
+    const totalChunks = Math.ceil(totalCount / 100);
+
     // Step 1: 번호 파싱
     setCurrentStep(1); setProgress(10);
+    setProgressText(`${totalCount}개 번호 정제 중...`);
     await new Promise((r) => setTimeout(r, 400));
     setProgress(25);
 
     // Step 2: API 전송
     setCurrentStep(2); setProgress(35);
+    setProgressText(
+      totalChunks > 1
+        ? `${totalChunks}개 묶음으로 분할 전송 중... (총 ${totalCount}건)`
+        : `${totalCount}건 전송 중...`
+    );
 
     try {
       const res = await fetch("/api/check", {
@@ -190,22 +204,28 @@ export default function Home() {
 
       // Step 3: 결과 처리
       setCurrentStep(3); setProgress(75);
+      setProgressText("응답 데이터 처리 중...");
       await new Promise((r) => setTimeout(r, 300));
 
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "조회 중 오류가 발생했습니다.");
-        setCurrentStep(0); setProgress(0);
+        setCurrentStep(0); setProgress(0); setProgressText("");
       } else {
         setProgress(100);
         setCurrentStep(4);
+        setProgressText(
+          data.chunks > 1
+            ? `${data.count}건 조회 완료 (${data.chunks}회 분할 처리)`
+            : `${data.count}건 조회 완료`
+        );
         await new Promise((r) => setTimeout(r, 500));
         setResults(data.results);
-        setCurrentStep(0); setProgress(0);
+        setCurrentStep(0); setProgress(0); setProgressText("");
       }
     } catch {
       setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
-      setCurrentStep(0); setProgress(0);
+      setCurrentStep(0); setProgress(0); setProgressText("");
     } finally {
       setLoading(false);
     }
@@ -256,13 +276,13 @@ export default function Home() {
               <h1>사업자 상태<br /><em>일괄 조회</em></h1>
               <p className="sub">
                 국세청 공공데이터 API 기반 · 계속사업자 / 휴업 / 폐업 실시간 확인<br />
-                최대 100건 동시 조회 · xlsx / csv / txt 파일 지원
+                최대 10,000건 동시 조회 · 100건 단위 자동 분할 · xlsx / csv / txt 파일 지원
               </p>
             </div>
             <div className="header-badges">
               <div className="badge"><span className="icon">🏛️</span>국세청 NTS API 연동</div>
               <div className="badge"><span className="icon">🔒</span>API 키 서버 보호</div>
-              <div className="badge"><span className="icon">⚡</span>최대 100건 동시 조회</div>
+              <div className="badge"><span className="icon">⚡</span>최대 10,000건 자동 분할</div>
             </div>
           </div>
         </header>
@@ -281,7 +301,12 @@ export default function Home() {
             <div className="textarea-footer">
               <span className="hint">숫자 외 문자는 자동 제거됩니다</span>
               {uniqueNumbers.length > 0 && (
-                <span className="count-pill">{uniqueNumbers.length}개 인식됨</span>
+                <span className={`count-pill${uniqueNumbers.length > 100 ? " count-pill-chunk" : ""}`}>
+                  {uniqueNumbers.length}개 인식됨
+                  {uniqueNumbers.length > 100 && (
+                    <span className="chunk-info"> · {Math.ceil(uniqueNumbers.length / 100)}회 분할</span>
+                  )}
+                </span>
               )}
             </div>
           </div>
@@ -337,8 +362,8 @@ export default function Home() {
             <div className="card-label"><span className="num">03</span> 예시 이미지 업로드 (선택)</div>
             <div className="example-grid">
               {exImages.map((img, i) => (
-                <div key={i} className="ex-img-wrap" onClick={() => setModalImg(img.url)}>
-                  <img src={img.url} alt={img.name} />
+                <div key={i} className="ex-img-wrap" onClick={() => setModalImg(img.data)}>
+                  <img src={img.data} alt={img.name} />
                   <button
                     className="del-btn"
                     onClick={(e) => { e.stopPropagation(); removeExImage(i); }}
@@ -369,7 +394,18 @@ export default function Home() {
             onClick={handleCheck}
             disabled={loading || uniqueNumbers.length === 0}
           >
-            {loading ? <><span>⏳</span> 조회 중…</> : <><span>🔍</span> 일괄 조회 ({uniqueNumbers.length}건)</>}
+            {loading ? (
+              <><span>⏳</span> 조회 중…</>
+            ) : (
+              <>
+                <span>🔍</span> 일괄 조회 ({uniqueNumbers.length}건)
+                {uniqueNumbers.length > 100 && (
+                  <span style={{ opacity: 0.7, fontSize: 12, marginLeft: 4 }}>
+                    · {Math.ceil(uniqueNumbers.length / 100)}회 분할
+                  </span>
+                )}
+              </>
+            )}
           </button>
           {results && (
             <button className="btn btn-outline" onClick={() => exportCSV(results)}>
@@ -380,7 +416,6 @@ export default function Home() {
             <button className="btn btn-ghost" onClick={() => {
               setText(""); setResults(null); setError(null);
               setUploadedFile(null); setFilter("all");
-              exImages.forEach((img) => URL.revokeObjectURL(img.url));
               setExImages([]);
             }}>
               초기화
@@ -402,7 +437,7 @@ export default function Home() {
                   </div>
                   <div className="pstep-text">
                     <span className="pstep-label">{s.label}</span>
-                    <span className="pstep-sub">{s.sub}</span>
+                    <span className="pstep-sub">{currentStep === s.id && progressText ? progressText : s.sub}</span>
                   </div>
                 </div>
               ))}
@@ -511,7 +546,7 @@ export default function Home() {
               공공데이터포털 국세청 사업자 상태조회 API
             </a>를 이용합니다.
             <br />
-            조회 결과는 참고용이며 법적 효력이 없습니다. · 최대 100건 / 1회
+            조회 결과는 참고용이며 법적 효력이 없습니다. · 최대 10,000건 / 1회 (100건 단위 자동 분할)
           </p>
         </footer>
       </div>
