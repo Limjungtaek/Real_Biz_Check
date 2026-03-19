@@ -55,16 +55,6 @@ function exportCSV(results) {
   URL.revokeObjectURL(url);
 }
 
-// 이미지 파일을 base64로 변환
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 // xlsx/xlsm/csv/txt 파싱
 async function parseFile(file) {
   const ext = file.name.split(".").pop().toLowerCase();
@@ -130,12 +120,31 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
-  const [exImages, setExImages] = useState([]); // {data (base64), name}[]
+  const [exImages, setExImages] = useState([]); // manifest.json에서 로드
+  const [exLoading, setExLoading] = useState(true);
   const [modalImg, setModalImg] = useState(null);
   const fileRef = useRef();
 
   const parsedNumbers = parseBizNumbers(text);
   const uniqueNumbers = [...new Set(parsedNumbers)];
+
+  // ── 예시 이미지 manifest.json 로드 ──
+  useEffect(() => {
+    fetch("/examples/manifest.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("not found");
+        return res.json();
+      })
+      .then((data) => {
+        setExImages(data.images || []);
+      })
+      .catch(() => {
+        setExImages([]);
+      })
+      .finally(() => {
+        setExLoading(false);
+      });
+  }, []);
 
   // ── File upload ──
   const handleFile = useCallback(async (file) => {
@@ -153,24 +162,6 @@ export default function Home() {
     e.preventDefault(); setDragOver(false);
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
-  };
-
-  // ── Example image upload (base64로 저장 → 사라지지 않음) ──
-  const handleExImage = async (e) => {
-    const files = Array.from(e.target.files || []);
-    for (const f of files) {
-      try {
-        const data = await fileToBase64(f);
-        setExImages((prev) => [...prev, { data, name: f.name }]);
-      } catch {
-        // 이미지 변환 실패 무시
-      }
-    }
-    e.target.value = "";
-  };
-
-  const removeExImage = (i) => {
-    setExImages((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   // ── API call with step progress (100건 초과 자동 분할) ──
@@ -356,36 +347,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── Example images ── */}
-        <div className="example-section">
-          <div className="card">
-            <div className="card-label"><span className="num">03</span> 예시 이미지 업로드 (선택)</div>
-            <div className="example-grid">
-              {exImages.map((img, i) => (
-                <div key={i} className="ex-img-wrap" onClick={() => setModalImg(img.data)}>
-                  <img src={img.data} alt={img.name} />
-                  <button
-                    className="del-btn"
-                    onClick={(e) => { e.stopPropagation(); removeExImage(i); }}
-                    title="삭제"
-                  >✕</button>
-                </div>
-              ))}
-              {exImages.length < 8 && (
-                <div className="ex-add-btn">
-                  <input type="file" accept="image/*" multiple onChange={handleExImage} />
-                  <span className="plus">+</span>
-                  <span>이미지 추가</span>
-                </div>
-              )}
-              {exImages.length === 0 && (
-                <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)", display: "flex", alignItems: "center", paddingLeft: 4 }}>
-                  참고용 이미지를 업로드하세요 (최대 8장)
-                </div>
-              )}
+        {/* ── Example images (서버에서 로드) ── */}
+        {!exLoading && exImages.length > 0 && (
+          <div className="example-section">
+            <div className="card">
+              <div className="card-label"><span className="num">03</span> 입력 예시 참고 이미지</div>
+              <div className="example-grid">
+                {exImages.map((img, i) => (
+                  <div
+                    key={i}
+                    className="ex-img-wrap"
+                    onClick={() => setModalImg(`/examples/${img.file}`)}
+                    title={img.caption || img.file}
+                  >
+                    <img src={`/examples/${img.file}`} alt={img.caption || img.file} />
+                    {img.caption && <div className="ex-caption">{img.caption}</div>}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── Actions ── */}
         <div className="action-row">
@@ -412,11 +394,10 @@ export default function Home() {
               <span>⬇</span> CSV 다운로드
             </button>
           )}
-          {(text || results || exImages.length > 0) && (
+          {(text || results) && (
             <button className="btn btn-ghost" onClick={() => {
               setText(""); setResults(null); setError(null);
               setUploadedFile(null); setFilter("all");
-              setExImages([]);
             }}>
               초기화
             </button>
