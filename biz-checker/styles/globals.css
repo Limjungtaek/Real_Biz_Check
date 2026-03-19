@@ -154,6 +154,10 @@ textarea::placeholder { color: var(--text3); }
   background: var(--cyan-dim); border: 1px solid rgba(0,212,255,.2);
   border-radius: 100px; color: var(--cyan);
 }
+.count-pill-chunk {
+  background: var(--amber-dim); border-color: rgba(255,176,32,.2); color: var(--amber);
+}
+.chunk-info { opacity: .75; }
 
 /* ── UPLOAD ── */
 .upload-zone {
