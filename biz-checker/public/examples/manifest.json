@@ -1,0 +1,12 @@
+{
+  "images": [
+    {
+      "file": "sample1.png",
+      "caption": "엑셀 입력 예시"
+    },
+    {
+      "file": "sample2.png",
+      "caption": "텍스트 입력 예시"
+    }
+  ]
+}
